@@ -11,11 +11,6 @@ int firstUseableAddress = 161;
 #define TABLE_SIZE 12
 
 // File allocation table: arrays of names, starting addresses and file lengths
-struct FATEntry {
-  char filename[12];
-  int addr;
-  int filesize;
-};
 
 FATEntry FAT[MAXFILES];
 

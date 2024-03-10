@@ -130,7 +130,7 @@ void kill() {
   clearBuffers();
 }
 void test() {
-  testFunc();
-  // Serial.println(F("subroutine TEST aangeroepen: "));
+  // testFunc();
+  Serial.println(F("subroutine TEST aangeroepen: "));
   clearBuffers();
 }

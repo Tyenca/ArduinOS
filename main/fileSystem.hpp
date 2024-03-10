@@ -25,10 +25,21 @@ extern EERef noOfFiles;
 //void writeFATEntry(FATEntry entry);
 //void readFATEntry();
 
+// File allocation table: arrays of names, starting addresses and file lengths
+
+struct FATEntry {
+  char filename[12];
+  int addr;
+  int filesize;
+};
+
+extern FATEntry FAT[MAXFILES];
+
 void storeFile();
 void retrieveFile();
 void eraseFile();
 void showFiles();
 void checkFreeSpace();
+int findFile(char name[BUFSIZE]);
 
 #endif

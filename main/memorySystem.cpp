@@ -1,13 +1,21 @@
 #include "memorySystem.hpp"
 
 //STACK
-byte stack[STACKSIZE];
-byte sp = 0;
-void pushByte(byte b) {
-  stack[sp++] = b;
+// byte stack[STACKSIZE];
+// byte sp = 0;
+// void pushByte(byte b) {
+//   stack[sp++] = b;
+// }
+// byte popByte() {
+//   return stack[--sp];
+// }
+// , int processID
+void pushByte(byte b, int processID) {
+  processTable[processID].stack[processTable[processID].sp++] = b;
 }
-byte popByte() {
-  return stack[--sp];
+// int processID
+byte popByte(int processID) {
+  return processTable[processID].stack[--processTable[processID].sp];
 }
 
 struct variable {
@@ -19,98 +27,102 @@ struct variable {
 };
 
 int noOfVars = 0;
-variable memoryTable[MAXPROCESSES];
+variable memoryTable[MAXVARIABLES];
 byte MEMORY[256];  //RAM memory
 
 //PUSH
-pushChar(char value) {
-  pushByte(value);
-  pushByte(CHAR);
+void pushChar(char value, int processID) {
+  pushByte(value, processID);
+  pushByte(CHAR, processID);
 }
-void pushInt(int value) {
-  pushByte(highByte(value));
-  pushByte(lowByte(value));
-  pushByte(INT);
+void pushInt(int value, int processID) {
+  pushByte(highByte(value), processID);
+  pushByte(lowByte(value), processID);
+  pushByte(INT, processID);
 }
-void pushFloat(float value) {
+void pushFloat(float value, int processID) {
   byte b[4];
   float *pf = (float *)b;
   *pf = value;
   for (int i = 3; i >= 0; i--) {
-    pushByte(b[i]);
+    pushByte(b[i], processID);
   }
-  pushByte(FLOAT);
+  pushByte(FLOAT, processID);
 }
-void pushString(char string[]) {
+void pushString(char string[], int processID) {
   for (int i = 0; i < sizeof(string); i++) {
-    pushByte(string[i]);
+    pushByte(string[i], processID);
   }
-  pushByte('\0');                //Push terminating zero
-  pushByte(sizeof(string) + 1);  //Push length string + terminating zero
-  pushByte(STRING);
+  pushByte('\0', processID);                //Push terminating zero
+  pushByte(sizeof(string) + 1, processID);  //Push length string + terminating zero
+  pushByte(STRING, processID);
 }
 //NOG NIET AF
-char popString() {
-  popByte();               //type
-  int length = popByte();  //Length
+char popString(int processID) {
+  // popByte(processID);               //type
+  int length = popByte(processID);  //Length
+  char string[length];
   for (int i = 0; i < length + 1; i++) {
-    popByte();
+    string[i] =+ popByte(processID);
   }
+  return string;
 }
 //POP
-int popInt() {
+int popInt(int processID) {
   // popByte() //Type
-  int LowByte = popByte();
-  int highByte = popByte();
+  int LowByte = popByte(processID);
+  int highByte = popByte(processID);
   return word(highByte, LowByte);  //word(highByte, LowByte)
 }
-float popFloat() {
+float popFloat(int processID) {
   // popByte() //Type
   byte b[4];
-  float *pf = (float *)b;
   for (int i = 3; i >= 0; i--) {
-    popByte();  //popByte(b[i]);
+    b[i] = popByte(processID);  //popByte(b[i]);
   }
+  float *pf = (float *)b;
   return *pf;
 }
 // char popChar() {
 ////identiek aan popByte()
 // }
 
-float popVal() {
-  int type = popByte();
+float popVal(int processID) {
+  int type = popByte(processID);
   if (type == 1) {
-    return popByte();
+    return popByte(processID);
   } else if (type == 2) {
-    return popInt();
+    return popInt(processID);
   } else if (type == 4) {
-    return popFloat();
+    return popFloat(processID);
   }
 }
 
 // Return top stack
-char peekType() {
-  int byte = popByte();
-  char type[] = "";
-  if (byte == 1) {
-    strcpy(type, "Char");
-    pushByte(CHAR);
-  } else if (byte == 2) {
-    strcpy(type, "Int");
-    pushByte(INT);
-  } else if (byte == 4) {
-    strcpy(type, "Float");
-    pushByte(FLOAT);
+byte peekType(int processID) {
+  int byte = popByte(processID);
+  // char type[] = "";
+  if (CHAR) {
+    Serial.print("Type on stack is CHAR");
+    pushByte(CHAR, processID);
+  } else if (INT) {
+    Serial.print("Type on stack is INT");
+    pushByte(INT, processID);
+  } else if (FLOAT) {
+    Serial.print("Type on stack is FLOAT");
+    pushByte(FLOAT, processID);
   }
-  Serial.print("Type on stack is ");
-  Serial.println(type);
+  else {
+    Serial.print("Type unknown");
+    pushByte(byte, processID);
+  }
 
-  return type;
+  return byte;
 }
 
 int findVariable(char name[BUFSIZE]) {
   for (int i = 0; i < noOfVars; i++) {
-    if (strcmp(memoryTable[noOfVars].name, name) == 0) {
+    if (strcmp(memoryTable[i].name, name) == 0) {
       return i;
     }
   }
@@ -136,7 +148,7 @@ void sortVariables() {
 int findFreeSpaceInMemoryTable(byte size) {
   sortVariables();
 
-  if (noOfVars == MAXPROCESSES) {
+  if (noOfVars == MAXVARIABLES) {
     Serial.println("findFreeSpaceInMemory(): max variables reached");
     return -1;  //not enough space left
   }
@@ -181,14 +193,15 @@ void saveVariableToMemoryTable(byte name, int processID) {
   }
 
   sortVariables();
-  byte type = popByte();
+  byte type = popByte(processID);
   int size = 0;
   if (type == CHAR) {
     size = 1;
   } else if (type == INT) {
     size = 2;
   } else if (type == STRING) {
-    size = popByte();
+    size = popByte(processID);
+    pushByte(size, processID); //put size back on stack
   } else if (type == FLOAT) {
     size = 4;
   }
@@ -209,12 +222,12 @@ void saveVariableToMemoryTable(byte name, int processID) {
 
   if (type == STRING) {
     for (int i = size - 1; i >= 0; i--) {
-      MEMORY[address] = popByte();
+      MEMORY[address] = popByte(processID);
       address++;
     }
   } else {
     for (int i = 0; i <= type; i++) {
-      MEMORY[address] = popByte();
+      MEMORY[address] = popByte(processID);
       address++;
     }
   }
@@ -243,28 +256,28 @@ void readVariableFromMemoryTable(byte name, int processID) {
   // Push bytes to stack
   if (process.type == CHAR) {
     for (int i = 0; i < process.size; i++) {
-      pushByte(MEMORY[process.addr]);
+      pushByte(MEMORY[process.addr], processID);
     }
-    pushByte(CHAR);
+    pushByte(CHAR, processID);
   }
   if (process.type == INT) {
     for (int i = 0; i < process.size; i++) {
-      pushByte(MEMORY[process.addr]);
+      pushByte(MEMORY[process.addr], processID);
     }
-    pushByte(INT);
+    pushByte(INT, processID);
   }
   if (process.type == STRING) {
     for (int i = 0; i < process.size; i++) {
-      pushByte(MEMORY[process.addr]);
+      pushByte(MEMORY[process.addr], processID);
     }
-    pushByte(size);
-    pushByte(STRING);
+    pushByte(size, processID);
+    pushByte(STRING, processID);
   }
   if (process.type == FLOAT) {
     for (int i = 0; i < process.size; i++) {
-      pushByte(MEMORY[process.addr]);
+      pushByte(MEMORY[process.addr], processID);
     }
-    pushByte(INT);
+    pushByte(INT, processID);
   }
 }
 void deleteAllVariables(int processID) {
@@ -291,16 +304,16 @@ void deleteAllVariables(int processID) {
 
 
 
-void testFunc() {
-  if (strcmp(parameter1, "push") == 0) {
-    Serial.println("byte pushed");
-    pushByte(FLOAT);
-  }
-  if (strcmp(parameter1, "pop") == 0) {
-    // Serial.println("get gedetecteerd");
-    Serial.println(popByte());
-    //OUTPUT: 4
-  }
-}
+// void testFunc(int processIndex) {
+//   if (strcmp(parameter1, "push") == 0) {
+//     Serial.println("byte pushed");
+//     pushByte(FLOAT, processIndex);
+//   }
+//   if (strcmp(parameter1, "pop") == 0) {
+//     // Serial.println("get gedetecteerd");
+//     Serial.println(popByte(processIndex));
+//     //OUTPUT: 4
+//   }
+// }
 
 // static Variable memoryTable[MAXVARIABLES];
